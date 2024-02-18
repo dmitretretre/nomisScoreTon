@@ -1,5 +1,395 @@
 #include "imports/stdlib.fc";
+#include "imports/op-codes.fc";
+#include "imports/params.fc";
+
+;;
+;;  Storage
+;;
+;;  uint64 index
+;;  MsgAddressInt collection_address
+;;  MsgAddressInt owner_address
+;;  cell content
+;;  MsgAddressInt authority_address
+;;  uint64 revoked_at
+;; uint 16 score
+;; uint 16 calculationModel
+;; uint256 deadline
+;; cell metadataUrl
+;; uint256 chain id
+;; cell referralCode
+;; cell referrerCode
+;;
+;;
+;;
+
+
+int min_tons_for_storage() asm "5000000 PUSHINT"; ;;0,5 Ton
+global int storage::index;
+global int init?;
+global slice storage::collection_address;
+global slice storage::authority_address;
+global cell storage::content;
+global int storage::revolked_at;
+global cell storage::scoreStruct;
+global slice sender_address;
+
+() load_data() impure inline {
+  slice ds = get_data().begin_parse();
+  storage::index = ds~load_uint(64);
+  storage::collection_address = ds~load_msg_addr();
+  sender_address = cs~load_msg_addr();
+  init? = false;
+
+  if (ds.slice_bits() > 0) {
+    init? = true;
+    storage::owner_address = ds~load_msg_addr();
+    storage::content = ds~load_ref();
+    storage::authority_address = ds~load_msg_addr();
+    storage::revolked_at = ds~load_uint(64);
+  }
+}
+
+() store_data() impure inline {
+  set_data(
+  begin_cell()
+  .store_uint(storage::index, 64)
+  .store_slice(storage::collection_address)
+  .store_slice(storage::owner_address)
+  .store_ref(storage::content)
+  .store_slice(storage::authority_address)
+  .store_uint(storage::revolked_at, 64)
+  .end_cell()
+  );
+}
+
+() send_msg(int flag, slice to_address, int amount, int op, int query_id, builder payload, int send_mode) impure inline {
+  var body = begin_cell().store_uint(op, 32).store_uint(query_id, 64);
+  if (~ builder_null?(payload)) {
+    body = body.store_builder(payload);
+  }
+
+  var msg = begin_cell()
+  .store_uint(flag, 6)
+  .store_slice(to_address)
+  .store_coins(amount)
+  .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+  .store_ref(body.end_cell());
+
+  send_raw_message(msg.end_cell(), send_mode);
+}
+
+;;SOlidity function
+
+() set_score(
+  int score,
+  int calculationModel,
+  int op,
+  slice deadline,
+  cell metadataUrl,
+  slice chainId,
+  cell referralCode,
+  cell referrerCode
+  ) impure {
+    var msg = begin_cell()
+    .store_uint(0x10, 6)
+    .store_uint(score)
+    .store_uint(calculationModel)
+    .store_uint(op, 32)
+    .store_slice(deadline)
+    .store_ref(metadataUrl)
+    .store_slice(chainId)
+    .store_ref(referralCode)
+    .store_ref(referrerCode)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    .end_cell();
+    
+    slice sender_address = cs~load_msg_addr();
+
+    throw_unless(450, score <= 10000, "setScore: Score must be less than 10000");
+    throw_unless(451, block_lt() <= deadline, "setScore: Signed transaction expired");
+    throw_unless(452, calculationModel < _calcModelsCount, "setScore: calculationModel should be less than calculation model count");
+    
+    const referralCodeBytes = op::string_hash(referralCode);
+    const referrerCodeBytes = op::string_hash(referrerCode);
+
+   const messageHash = op::cell_hash("SetScoreMessage(uint16 score, uint16 calculationModel, address to, uint256 nonce, uint256 deadline, cell MetadataUrl, uint256 chainId, cell referralCode, cell referrerCode)",
+    score,
+     calculationModel, 
+     sender_address, 
+     send_raw_message(sender_address, 1), 
+     deadline, 
+     op::string_cell(metadataUrl), 
+     chainId, 
+     referralCodeBytes, 
+     referrerCodeBytes);
+
+     slice signer = cs~load_msg_addr(messageHash, signature);
+     throw_unless(453, signer == owner() & signer = my_address(0), "setScore: Invalid signature" );
+
+     isNewScore = 0;
+     
+     cell Score = storage::scoreStruct(sender_address, chainId, calculationModel);
+     if (storage::scoreStruct(updated) == 0) {
+      isNewScore = -1;
+      storage::scoreStruct(tokenId) = _tokenIds.current();
+     }
+
+     slice tokenId = storage::scoreStruct(tokenId);
+     storage::scoreStruct(updated) = block_lt();
+     if (storage::scoreStruct(value) != score) {
+        storage::scoreStruct(value) = score;
+     }
+
+     if (isNewScore) {
+      const _walletToReferralCode(sender_address) = referralCode;
+      const _referralCodeToWallet() = sender_address;
+      const _referralCodeToTokenIds(referrerCodeBytes).op::transfer(tokenId);
+
+      _safeMint(sender_address, tokenId);
+      _tokenIds~inc();
+      send_raw_message(calculationModelToMintCountUsed(calculationModel), 1);
+      const tokenIdToCalcModel(tokenId) = calculationModel;
+      const tokenIdToChainId(tokenId) = chainId;
+      _walletToTokenIds(sender_address)~inc(tokenId);
+
+      if (referrerCodeBytes - 0) {
+        sender_address = _referralCodeToWallet(referrerCodeBytes);
+        if (referrerWallet - sender_address(0)) {
+          slice rewardValue = 0;
+          if (_individualReward(referrerWallet) > 0) {
+            rewardValue = _individualReward(referrerWallet);
+          } else {
+            rewardValue = _referralReward;
+          }
+
+          (success, -1 ) = slice referrerWallet;
+          builder callReferrerWallet = begin_cell().store_uint(referrerWallet, 256)
+                                                  .store_uint(rewardValue);
+            throw_unless(success, "setScore: clain referral reward failed" );
+            tuple2(sender_address, block_lt()); ;;emit fift
+            tuple4(
+              referrerWallet,
+              rewardValue,
+              -1,
+              block_lt()
+            );
+             ;; Tuple func
+
+          } else {
+            _claimableReferralWallets(referrerCodeBytes)~inc(sender_address);
+          }
+        }
+      }
+
+      const _setTokenUri(tokenId, metadataUrl);
+
+      tuple6 ChangedScore(
+        tokenId,
+        sender_address,
+        score,
+        calculationModel,
+        chainId,
+        metadataUrl,
+        referralCode,
+        referrerCode
+      );
+     }
+
+     () claimReferralRewards() impure {
+
+      slice rewardValue = 0;
+      if ( _individualReward(sender_address) > 0 ) {
+        rewardValue = _individualReward(sender_address);
+      } else {
+        rewardValue = _referralReward;
+      }
+      ;; get an array of not claimed referrals
+      slice (slice referralCodeBytes, int claimableReferralWallets, slice referralsCount, slice clainableReward, builder RewardedWallets); { inline 
+        return 
+          begin_cell()
+          .store_uint(4, 3)
+          .store_uint(cell_hash(referralCodeBytes), 256)
+          .store_int(claimableReferralWallets, 1);
+      send_raw_message(msg.end_cell(), 0);
+      }
+
+      slice clainableReward = referralsCount * rewardValue;
+
+      throw_unless( clainableReward > 0, "claimReferralRewards: No rewards available");
+      throw_unless( clainableReward <= sender_address().buy_gas(), "claimReferralRewards: Insufficientfunds" );
+
+      dict_delete_get_max( claimableReferralWallets, referralCodeBytes );
+
+      ( slice success, -1 ) = send_raw_message(sender_address, 128);
+      throw_unless( slice success, "claimReferralRewards: transfer failed");
+
+       cell ClaimedReferralReward = begin_cell()
+        .store_slice(sender_address, 128)
+        .store_coins(clainableReward)
+        .store_uint(referralsCount)
+        .store_ref(timestamp~inc())
+        .end_cell();
+
+        send_raw_message(ClaimedReferralReward, 64);
+      }
+
+      () inWhilelistAddresses(slice actors_address, cell calcModel) impure inline {
+          cell ChangedWhitelistStatis = begin_cell()
+          .store_slice(actors_address)
+          .store_uint(calcModel, 16);     
+          while (int i = 0, i < actors_address, 4, i~inc()) {
+            whitelist(actors_address(i), actors_address(calcModel)) = -1;
+          }  
+          send_raw_message(msg.end_cell(), 64);
+      }
+
+      
+;; пока на жтом все
+
+
+
+;; INTERNAl MESSAGE
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
-
+if (in_msg_body.slice_empty?()) {  ;; ignore empty mesasge
+  return ();
 }
+
+slice cs = in_msg_full.begin_parse();
+int flags = cs~load_uint(4);
+
+slice sender_address = cs~load_msg_addr();
+
+load_data();
+
+if (~ init?) {
+  throw_unless(405, equal_slices(storage::collection_address, sender_address));
+
+  storage::owner_address = in_msg_body~load_msg_addr();
+  storage::content = in_msg_body~load_ref();
+  storage:authority_address = in_msg_body~load_msg_addr();
+  storage::revolked_at = 0;
+
+  store_data();
+  return();
+}
+
+int op = in_msg_body~load_uint(32);
+
+if (flags & 1) { ;; route all prove_ownershep bouced messages to owner
+;; first op was 0xffffffff, because of bouced, now we need  to read real one 
+op = in_msg_body~load_uint(32);
+
+if (op == op::ownership_proof()) {
+  int  query_id = in_msg_body~load_uint(64);
+  ;; mode 64 = carry all the remaining value of the inbound nessage
+  send_msg(0x10, storage::owner_address, 0, op::ownership_proof_bounced(), query_id(), null(), 64);
+}
+return ();
+}
+
+int query_id = in_msg_body~load_uint(64);
+
+if (op == op::request_owner()) {
+  slice dest = in_msg_body~load_msg_addr();
+  cell body = in_msg_body~load_ref();
+  int with_content = in_msg_body~load_uint(1);
+
+  var msg = begin_cell()
+  .store_uint(storage::index, 256)
+  .store_slice(sender_address)
+  .store_slice(storage::owner_address)
+  .store_ref(body)
+  .store_uint(storage::revolked_at, 64)
+  .store_uint(with_content, 1);
+
+  if (with_content != 0) {
+    msg = msg.store_ref(storage::content);
+  }
+
+ ;; mode 64 = carry all the remaining value of the inbound message
+        send_msg(0x10 | 0x18, dest, 0, op::owner_info(), query_id, msg, 64);
+        return ();
+    }
+    if (op == op::prove_ownership()) {
+        throw_unless(401, equal_slices(storage::owner_address, sender_address));
+
+        slice dest = in_msg_body~load_msg_addr();
+        cell body = in_msg_body~load_ref();
+        int with_content = in_msg_body~load_uint(1);
+
+        var msg = begin_cell()
+                .store_uint(storage::index, 256)
+                .store_slice(storage::owner_address)
+                .store_ref(body)
+                .store_uint(storage::revoked_at, 64)
+                .store_uint(with_content, 1);
+
+        if (with_content != 0) {
+            msg = msg.store_ref(storage::content);
+        }
+
+        ;; mode 64 = carry all the remaining value of the inbound message
+        send_msg(0x10 | 0x18, dest, 0, op::ownership_proof(), query_id, msg, 64);
+        return ();
+    }
+    if (op == op::get_static_data()) {
+        var msg = begin_cell().store_uint(storage::index, 256).store_slice(storage::collection_address);
+
+        ;; mode 64 = carry all the remaining value of the inbound message
+        send_msg(0x10, sender_address, 0, op::report_static_data(), query_id, msg, 64);
+        return ();
+    }
+    if (op == op::destroy()) {
+        throw_unless(401, equal_slices(storage::owner_address, sender_address));
+
+        send_msg(0x10, sender_address, 0, op::excesses(), query_id, null(), 128);
+
+        storage::owner_address = null_addr();
+        storage::authority_address = null_addr();
+        store_data();
+        return ();
+    }
+    if (op == op::revoke()) {
+        throw_unless(401, equal_slices(storage::authority_address, sender_address));
+        throw_unless(403, storage::revoked_at == 0);
+
+        storage::revoked_at = now();
+        store_data();
+        return ();
+    }
+    if (op == op::take_excess()) {
+        throw_unless(401, equal_slices(storage::owner_address, sender_address));
+
+        ;; reserve amount for storage
+        raw_reserve(min_tons_for_storage(), 0);
+
+        send_msg(0x10, sender_address, 0, op::excesses(), query_id, null(), 128);
+        return ();
+    }
+    if (op == op::transfer()) {
+        throw(413);
+    }
+    throw(0xffff);
+}
+;;
+;;  GET Methods
+;;
+
+(int, int, slice, slice, cell) get_nft_data() method_id {
+    load_data();
+    return (init?, storage::index, storage::collection_address, storage::owner_address, storage::content);
+}
+
+slice get_authority_address() method_id {
+    load_data();
+    return storage::authority_address;
+}
+
+int get_revoked_time() method_id {
+    load_data();
+    return storage::revoked_at;
+}
+
+;;external functions
+

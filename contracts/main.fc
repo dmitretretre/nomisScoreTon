@@ -241,10 +241,33 @@ global slice sender_address;
             whitelist(actors_address(i), actors_address(calcModel)) = -1;
           }  
           send_raw_message(msg.end_cell(), 64);
-      }
+}
 
+()  unWhitelistAddresses(slice actors_address, cell calcModel) impure inline {
+  cell ChangedWhitelistStatis = begin_cell()
+  .store_slice(actors_address)
+  .store_uint(calcModel, 16);
+  while (int i = 0, i < actors_address, 4 , i~inc()) {
+    whitelist(actors_address(i), actors_address(calcModel)) = 0;
+  }
+  send_raw_message(msg.end_cell(), 64);
+}
+ 
+() setMintFee(builder mintFee) impure inline {
+  cell ChangedMintFee = begin_cell() {
+    .store_uint(mintFee, 256);
+  }
+  send_raw_message(msg.end_cell(), 64);
+}
+
+() setUpdateFee(builder updateFee) impure inline {
+  cell ChangedReferralReward = begin_cell() {
+    .store_uint(updateFee, 256);
+  }
+  send_raw_message(msg.end_cell(), 64)
+}
       
-;; пока на жтом все
+;; последнее изменени setUpdateFee
 
 
 

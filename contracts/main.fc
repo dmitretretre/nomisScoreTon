@@ -311,7 +311,7 @@ unpause = msg.store_uint(0x11, 15);
 
 () setBaseUri()
 
-;;последнее изменение setReferralReward
+;;последнее изменение внесение withDraw
 
 ;; INTERNAl MESSAGE
 

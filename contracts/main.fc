@@ -244,7 +244,7 @@ global slice sender_address;
 }
 
 ()  unWhitelistAddresses(slice actors_address, cell calcModel) impure inline {
-  cell ChangedWhitelistStatis = begin_cell()
+  builder ChangedWhitelistStatis = begin_cell()
   .store_slice(actors_address)
   .store_uint(calcModel, 16);
   while (int i = 0, i < actors_address, 4 , i~inc()) {
@@ -253,23 +253,65 @@ global slice sender_address;
   send_raw_message(msg.end_cell(), 64);
 }
  
-() setMintFee(builder mintFee) impure inline {
-  cell ChangedMintFee = begin_cell() {
+() setMintFee(cell mintFee) impure inline {
+  builder ChangedMintFee = begin_cell() {
     .store_uint(mintFee, 256);
   }
   send_raw_message(msg.end_cell(), 64);
 }
 
-() setUpdateFee(builder updateFee) impure inline {
-  cell ChangedReferralReward = begin_cell() {
+() setUpdateFee(cell updateFee) impure inline {
+  builder ChangedUpdateFee = begin_cell() {
     .store_uint(updateFee, 256);
   }
-  send_raw_message(msg.end_cell(), 64)
+  send_raw_message(msg.end_cell(), 64);
 }
-      
-;; последнее изменени setUpdateFee
+    
+() setReferralReward(cell referralReward) impure inline {
+  builder ChangedReferralReward = begin_cell() {
+    .store_uint(referralReward, 256);
+  }
+    send_raw_message(msg.end_cell(), 64);
+}
 
+() setIndividualMintFee(slice address_wallet, int calcModel, cell fee) impure inline {
+  cell individualMintFee = fee(calcModel, address_wallet);
+ builder ChangedIndividualUpdateFee = begin_cell() {
+   .store_slice(address_wallet)
+   .store_uint(calcModel, 16)
+   .store_ref(fee);
+ }
+ send_raw_message(msg.end_cell(), 1);
+}
 
+() setFreeMints(int freeMintCount, int calcModel) impure inline {
+  cell calculationModelToFreeMintCount = freeMintCount(calcModel);
+  builder ChangedFreeMintCount = begin_cell() {
+    .store_uint(freeMintCount, 16)
+    .store_uint(calcModel, 16);
+  }
+  send_raw_message(msg.end_cell(), 64);
+}
+
+() withDraw(int amount) impure inline {
+  int balance = msg_body~load_uint(256);
+  (success, 0) = msg.sender_address(amount, 1);
+  builder Withdrawal = begin_cell() {
+    .store_uint(amount, 256)
+    .store_slice(sender_address, 1);
+  throw_unless(401, balance > 0, "Withdrawal: No funds available");
+  throw_unless(402, amount <= balance, "Withdrawal: In sufficient funds");
+  throw_unless(403, success, "Withdrawal: transfer failed");
+}
+    sender_address(msg.end_cell(), 64);
+}
+
+pause = msg.store_uint(0x10, 16);
+unpause = msg.store_uint(0x11, 15);
+
+() setBaseUri()
+
+;;последнее изменение setReferralReward
 
 ;; INTERNAl MESSAGE
 

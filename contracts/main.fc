@@ -303,16 +303,97 @@ global slice sender_address;
   throw_unless(402, amount <= balance, "Withdrawal: In sufficient funds");
   throw_unless(403, success, "Withdrawal: transfer failed");
 }
-    sender_address(msg.end_cell(), 64);
+    send_raw_message(msg.end_cell(), 64);
 }
 
 pause = msg.store_uint(0x10, 16);
 unpause = msg.store_uint(0x11, 15);
 
-() setBaseUri()
+() setBaseUri("baseUri"s) impure inline {
+  int baseUri = "baseUri"s;
+  builder ChangedBaseURI = begin_cell() {
+  .store_uint(baseUri);
+  }
+  send_raw_message(msg.end_cell(), 64);
+}
 
-;;последнее изменение внесение withDraw
+() setCalcModelsCoubt(int calcModelsCount) impure inline {
+  int calcModelsCount = calcModelsCount;
+  builder ChangedCalculationModelsCount = begin_cell() {
+  .store_uint(calcModelsCount, 16);
+  throw_unless(401, calcModelsCount > 0, "setCalcModelsCount: calcModelsCount should be greater than 0");
+}
+    send_raw_message(msg.end_cell(), 64);
+}
+;; external view returns functions = get methods
+(slice) getCurrentTokenId() method_id {
+  slice tokenIds = null();
+  int current_time = now();
+  if (tokenIds = current_time);
+  return (tokenIds);
+}
 
+(s) getReferralCode(slice addr) method_id {
+    slice addr = ds~load_msg_addr();
+    int memory = "memory"s;
+    return (_walletToReferralCode[addr]);
+}
+
+(s) getWalletByReferralCode(addr) method_id {
+  int referralCode = "referralCode"s;
+  return (getWalletByReferralCode(len(referralCode)));
+}
+
+(int) getWalletByReferralCode(addr) method_id {
+  int referralCode = in_msg_body~load_uint(32);
+  if (referralCode != 0, "getWalletByReferralCode: Invalid referral code");
+  return (_referralCodeToWallet[referralCode]);
+}
+
+(s) getWalletByReferrerCode(slice referredTokenIds) method_id {
+  slice referredTokenIds = ds~load_msg_addr(256);
+  referredTokenIds = _referralCodeToTokenIds[len(referrerCode)];
+  slice wallets = ds~load_msg_addr();
+  wallets = referredTokenIds.tuple;
+  if (slice i = 0; i < referredTokenIds.tuple; i~inc()) {
+    int i = wallets;
+    i = owner(referredTokenIds);
+  }
+  return (wallets);
+}
+
+(slice, slice) getClaimableReward(slice wallet) method_id {
+  slice wallet = ds~load_msg_addr();
+  slice rewardValue = 0;
+  if (_individualReward(wallet) > 0) {
+    rewardValue = _individualReward(wallet);
+  } else {
+    rewardValue = _referralReward;
+  }
+  referralCodeBytes = in_msg_body~load_uint(32),
+  cell(_walletToReferralCode(msg.sender_address));
+  claimableReferralWallets = _claimableReferralWallets(referralCodeBytes);
+  return (claimableReferralWallets.tuple * rewardValue);
+}
+;;end of first getMethods pack
+
+() getScore(slice addr, slice blockchaindId, int calcModel) method_id {
+  (int score, cell updated, slice tokenId, int calculationModel, slice chaindId, slice owner_address) = load_data();
+  slice owner_address = ds~load_msg_addr();
+  slice updated = in_msg_body~load_data();
+  scoreStruct = _score(addr, blockchaindId, calcModel);
+  return scoreStruct(begin_cell(
+  .store_uint(1, 8) ;;offchain tag
+  .store_uint(score, 16)
+  .store_uint(updated, 256)
+  .store_slice(tokenId, 256)
+  .store_uint(calculationModel, 16)
+  .store_slice(blockchaindId, 256)
+  .store_slice(owner_address)
+  .end_cell());
+}
+
+;;последнее изменение внесение getScore
 ;; INTERNAl MESSAGE
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {

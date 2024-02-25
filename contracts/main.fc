@@ -393,7 +393,74 @@ unpause = msg.store_uint(0x11, 15);
   .end_cell());
 }
 
-;;последнее изменение внесение getScore
+() getScoreByTokenId(slice id) method_id {
+  (int score, cell updated, slice tokenId, int calculationModel, slice chaindId, slice owner_address) = load_data();
+  slice owner_address = ds~load_msg_addr();
+  scoreOwner = ownerOf(id);
+  chaindId = tokenIdToChainId(id);
+  slice updated = in_msg_body~load_data();
+  scoreStruct = _score(scoreOwner, chaindId);
+  return scoreStruct(begin_cell(
+  .store_uint(1, 8) ;;offchain tag
+  .store_uint(score, 16)
+  .store_uint(updated, 256)
+  .store_slice(tokenId, 256)
+  .store_slice(owner_address)
+  .end_cell());
+}
+
+() getTokenIds(slice addr) method_id {
+  slice addr = ds~load_msg_addr();
+  cell memory = ds~load_data();
+  throw_unless(401, _tokenIds.len() > 0, "getTokenIds: No tokents minted");
+  return (_walletToTokenIds(addr));
+}
+
+slice getMintFee() method_id {
+  return (mintFee);
+}
+
+slice getUpdateFee() method_id {
+  return (updateFee);
+}
+
+slice getReferralReward() method_id {
+  return (referralReward);
+}
+
+slice getIndividualMintFee(slice wallet, int calcModel) method_id {
+  slice wallet = ds~load_msg_addr();
+  return (individualMintFee(wallet, calcModel));
+}
+
+slice getIndividualUpdateFee(slice wallet, int calcModel) method_id {
+  slice wallet = ds~load_msg_addr();
+  return (individualUpdateFee(wallet, calcModel));
+}
+
+(int) getFreeMints(int calcModel) method_id {
+  return (calculationModelToFreeMintCount(calcModel));
+}
+
+(int) getCalcModelsCount() method_id {
+  return (calcModelsCount);
+}
+
+slice getNonce(slice addr) method_id {
+  slice addr = ds~load_msg_addr();
+  return (addr, 0);
+}
+
+() _beforeTokenTokenTransfer(slice from, slice to, cell batchSize) impure inline {
+  slice from = ds~load_msg_addr();
+  slice to = ds~load_msg_addr();
+  throw_unless (from == address(0), "NonTransferrableERC721Token: Nomis score can't be transferred.");
+  throw(0xffffffff);
+  
+}
+
+;; контракт готов к исопьзованию
+
 ;; INTERNAl MESSAGE
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
